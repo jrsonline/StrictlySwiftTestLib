@@ -78,6 +78,7 @@ extension XCTestCase {
                     switch outcome {
                     case .failure(let e):
                         self.recordFailure(withDescription: "Failed with \(e)", inFile: String("\(file)"), atLine: Int(line), expected: false)
+                        exp.fulfill()
                      //   XCTFail("Failed with \(e)", file:file, line:line)
                     case .finished:exp.fulfill()
                     } },
