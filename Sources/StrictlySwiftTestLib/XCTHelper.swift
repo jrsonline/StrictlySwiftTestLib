@@ -67,68 +67,72 @@ public func getTestResourceDirectory(file: StaticString = #file) -> URL {
 ///     XCTAssertEqual(resultC1, true) // able to create table successfully
 ///
 @available(OSX 10.15, *)
-public func XCTWaitForPublisherResult<T, P>(timeout: Double = 5, file: StaticString = #file, line: UInt = #line, publisher: () -> P) -> T? where P:Publisher, P.Output == T {
-    let exp = XCTestExpectation(description: "expect")
-    
-    var result: T?
-    let cancellable = publisher()
-        .sink(
-            receiveCompletion: { outcome in
-                switch outcome {
-                case .failure(let e): XCTFail("Failed with \(e)", file:file, line:line)
-                case .finished:exp.fulfill()
-                } },
-            receiveValue: { value in result = value })
-    
-    let outcome = XCTWaiter.wait(for: [exp], timeout: timeout)
-    
-    switch outcome {
-    case .completed:
+extension XCTestCase {
+    public func XCTWaitForPublisherResult<T, P>(timeout: Double = 5, file: StaticString = #file, line: UInt = #line, publisher: () -> P) -> T? where P:Publisher, P.Output == T {
+        let exp = XCTestExpectation(description: "expect")
+        
+        var result: T?
+        let cancellable = publisher()
+            .sink(
+                receiveCompletion: { outcome in
+                    switch outcome {
+                    case .failure(let e):
+                        self.recordFailure(withDescription: "Failed with \(e)", inFile: String("\(file)"), atLine: Int(line), expected: false)
+                     //   XCTFail("Failed with \(e)", file:file, line:line)
+                    case .finished:exp.fulfill()
+                    } },
+                receiveValue: { value in result = value })
+        
+        let outcome = XCTWaiter.wait(for: [exp], timeout: timeout)
+        
+        switch outcome {
+        case .completed:
+            return result
+        case .timedOut:
+            XCTFail("XCTWaitForPublisherResult failed to get publisher result before timeout of \(timeout) seconds", file:file, line:line)
+        default:
+            XCTFail("XCTWaitForPublisherResult failed with error", file:file, line:line)
+        }
+        
+        NSLog("Cancellable is \(cancellable)")  //  ???
+        
         return result
-    case .timedOut:
-        XCTFail("XCTWaitForPublisherResult failed to get publisher result before timeout of \(timeout) seconds", file:file, line:line)
-    default:
-        XCTFail("XCTWaitForPublisherResult failed with error", file:file, line:line)
     }
-    
-    NSLog("Cancellable is \(cancellable)")  //  ???
-    
-    return result
-}
 
 
-/// Similar to `XCTWaitForPublisherResult`, but expects to receive a failure in the given timeframe.
-///
-/// Pass parameter `unexpectedSuccessMessage` to customize the XCTFail you'll get if the publisher, in fact,
-/// succeeds.
-@available(OSX 10.15, *)
-public func XCTWaitForPublisherFailure<T, P>(unexpectedSuccessMessage: String = "", timeout: Double = 5, file: StaticString = #file, line: UInt = #line, publisher: () -> P) -> P.Failure? where P:Publisher, P.Output == T {
-    let exp = XCTestExpectation(description: "expect")
-    
-    var failure: P.Failure?
-    let cancellable = publisher()
-        .sink(
-            receiveCompletion: { outcome in
-                switch outcome {
-                case .failure(let e):
-                    failure = e
-                    exp.fulfill()
-                case .finished:
-                    exp.fulfill()
-                } },
-            receiveValue: { _ in })
-    
-    let waitOutcome = XCTWaiter.wait(for: [exp], timeout: timeout)
-    
-    switch (waitOutcome, failure) {
-    case (.completed, .none):
-        XCTFail("XCTWaitForPublisherFailure unexpectedly succeeded. "+unexpectedSuccessMessage, file:file, line:line)
-    case (.completed, .some(_)):
-        break
-    default:
-        XCTFail("XCTWaitForPublisherFailure didn't get expected failure before timeout", file:file, line:line)
+    /// Similar to `XCTWaitForPublisherResult`, but expects to receive a failure in the given timeframe.
+    ///
+    /// Pass parameter `unexpectedSuccessMessage` to customize the XCTFail you'll get if the publisher, in fact,
+    /// succeeds.
+    @available(OSX 10.15, *)
+    public func XCTWaitForPublisherFailure<T, P>(unexpectedSuccessMessage: String = "", timeout: Double = 5, file: StaticString = #file, line: UInt = #line, publisher: () -> P) -> P.Failure? where P:Publisher, P.Output == T {
+        let exp = XCTestExpectation(description: "expect")
+        
+        var failure: P.Failure?
+        let cancellable = publisher()
+            .sink(
+                receiveCompletion: { outcome in
+                    switch outcome {
+                    case .failure(let e):
+                        failure = e
+                        exp.fulfill()
+                    case .finished:
+                        exp.fulfill()
+                    } },
+                receiveValue: { _ in })
+        
+        let waitOutcome = XCTWaiter.wait(for: [exp], timeout: timeout)
+        
+        switch (waitOutcome, failure) {
+        case (.completed, .none):
+            XCTFail("XCTWaitForPublisherFailure unexpectedly succeeded. "+unexpectedSuccessMessage, file:file, line:line)
+        case (.completed, .some(_)):
+            break
+        default:
+            XCTFail("XCTWaitForPublisherFailure didn't get expected failure before timeout", file:file, line:line)
+        }
+        
+        NSLog("Cancellable is \(cancellable)")  //  ???
+        return failure
     }
-    
-    NSLog("Cancellable is \(cancellable)")  //  ???
-    return failure
 }
